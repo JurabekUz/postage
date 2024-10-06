@@ -131,6 +131,7 @@ dmypy.json
 .pyre/
 .idea/*
 .env
+*.env
 
 #project files
 media/
