@@ -55,6 +55,7 @@ class InventoryAction(BaseModel):
     inventory = models.ForeignKey(Inventory, on_delete=models.CASCADE, related_name='actions')
     user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='actions')
     action = models.PositiveSmallIntegerField(choices=Status.choices, default=Status.accepted)
+    send_mgs = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = _("Inventory Action")
@@ -80,4 +81,3 @@ def format_number(number):
 def reverse_format(formatted_string):
     # Extract the number part from the string and convert it to an integer
     return int(formatted_string.split('-')[1])
-

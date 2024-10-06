@@ -7,4 +7,4 @@ class InventoryFilter(filters.FilterSet):
 
     class Meta:
         model = Inventory
-        fields = ['status', 'recipient', 'date', 'number', 'is_paid']
+        fields = ['status', 'date', 'number', 'is_paid']

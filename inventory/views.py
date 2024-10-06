@@ -1,14 +1,18 @@
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count, Sum
+from django.db.models.functions import ExtractMonth
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from branch.models import Branch
 from employees.models import Driver
+from users.models import BotUser
 from utils.filters import InventoryFilter
+from utils.msg_services import send_telegram_message
 from .models import Inventory, InventoryAction, Status
 from .serializers import (
     InventoryListSerializer, InventoryCreateSerializer, InventoryDetailSerializer
@@ -19,7 +23,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
     queryset = Inventory.objects.all()
     serializer_class = InventoryListSerializer
     filterset_class = InventoryFilter
-    search_fields = ['acceptor_name']
+    search_fields = ['acceptor_name', 'sender_name']
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -67,7 +71,13 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 user=self.request.user,
                 action=Status.sent
             )
-
+        try:
+            tg_id = BotUser.objects.get(phone_number=obj.sender_phone).telegram_id
+            send_telegram_message(tg_id, obj)
+        except BotUser.DoesNotExist:
+            print('BotUser does not exist')
+        except Exception as err:
+            print(err)
         return Response(status=200)
 
     @action(detail=True, methods=['post'], url_path='deliver')
@@ -82,6 +92,15 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 user=self.request.user,
                 action=Status.delivered
             )
+        try:
+            tg_id = BotUser.objects.get(phone_number=obj.sender_phone).telegram_id
+            send_telegram_message(tg_id, obj)
+            tg_id_2 = BotUser.objects.get(phone_number=obj.acceptor_phone).telegram_id
+            send_telegram_message(tg_id_2, obj)
+        except BotUser.DoesNotExist:
+            print('BotUser does not exist')
+        except Exception as err:
+            print(err)
         return Response(status=200)
 
     @action(detail=True, methods=['post'], url_path='close')
@@ -97,4 +116,70 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 user=self.request.user,
                 action=Status.closed
             )
+        try:
+            tg_id = BotUser.objects.get(phone_number=obj.sender_phone).telegram_id
+            send_telegram_message(tg_id, obj)
+            tg_id_2 = BotUser.objects.get(phone_number=obj.acceptor_phone).telegram_id
+            send_telegram_message(tg_id_2, obj)
+        except BotUser.DoesNotExist:
+            print('BotUser does not exist')
+        except Exception as err:
+            print(err)
         return Response(status=200)
+
+
+class StatisticsView(APIView):
+    def get(self, request):
+        year = request.query_params.get('year')
+        inv = Inventory.objects.all()
+        if year:
+            inv = inv.filter(created_at__year=int(year))
+
+        sent_count = inv.filter(
+            status=Status.sent,
+        ).aggregate(count=Count('id', default=0  ))['count']
+
+        if not self.request.user.is_staff:
+            inv = inv.filter(branch_id=self.request.user.branch_id)
+
+            sent_count = inv.filter(
+                status=Status.sent,
+                branch_id=self.request.user.branch_id,
+                recipient_id=self.request.user.branch_id
+            ).aggregate(count=Count('id', default=0))['count']
+
+        status_counts_query_dict = inv.values('status').annotate(
+            count=Count('id')
+        )
+        status_counts = {item['status']: item['count'] for item in status_counts_query_dict}
+
+
+        monthly_stat_counts = inv.annotate(
+            month=ExtractMonth('created_at')
+        ).values('month').annotate(
+            count=Count('id'),
+            total_weight=Sum('weight'),
+            total_price=Sum('price')
+        ).order_by('month')
+
+        monthly_counts = [0] * 12
+        monthly_weights = [0] * 12
+        monthly_prices = [0] * 12
+
+        for item in monthly_stat_counts:
+            monthly_counts[item['month'] - 1] = item['count']
+            monthly_weights[item['month'] - 1] = item['total_weight']
+            monthly_prices[item['month'] - 1] = item['total_price']
+
+        stat = {
+            'accepted': status_counts.get(Status.accepted, 0),
+            'sent': sent_count,
+            'delivered': status_counts.get(Status.delivered, 0),
+            'closed': status_counts.get(Status.closed, 0),
+
+            'monthly_counts': monthly_counts,
+            'monthly_weights': monthly_weights,
+            'monthly_prices': monthly_prices
+        }
+
+        return Response(data=stat)

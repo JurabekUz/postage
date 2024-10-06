@@ -3,7 +3,9 @@ from rest_framework import serializers
 
 from employees.serializers import DriverSerializer
 from users.serializers import UserFullNameSerializer
+from utils.msg_services import generate_msg, send_telegram_message
 from .models import Inventory, InventoryAction, InventoryImage, Status
+from users.models import BotUser
 
 
 class IdNameSerializer(serializers.Serializer):
@@ -48,6 +50,14 @@ class InventoryCreateSerializer(serializers.ModelSerializer):
 
         for image in self.context['request'].FILES.getlist('images'):
             InventoryImage.objects.create(inventory=obj, image=image)
+
+        try:
+            tg_id = BotUser.objects.get(phone_number=validated_data['sender_phone']).telegram_id
+            send_telegram_message(tg_id, obj)
+        except BotUser.DoesNotExist:
+            print('BotUser does not exist')
+        except Exception as err:
+            print(err)
         return obj
 
 
