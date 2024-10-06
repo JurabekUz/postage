@@ -135,24 +135,21 @@ class StatisticsView(APIView):
         if year:
             inv = inv.filter(created_at__year=int(year))
 
-        sent_count = inv.filter(
-            status=Status.sent,
-        ).aggregate(count=Count('id', default=0  ))['count']
+        accepted_count = inv.filter(status=Status.accepted)
+        sent_count = inv.filter(status=Status.sent)
+        delivered_count = inv.filter(status=Status.delivered)
+        closed_count = inv.filter(status=Status.closed)
+
 
         if not self.request.user.is_staff:
+            accepted_count = accepted_count.filter(branch_id=self.request.user.branch_id)
+            sent_count = sent_count.filter(
+                Q(branch_id=self.request.user.branch_id) | Q(recipient_id=self.request.user.branch_id)
+            )
+            delivered_count = delivered_count.filter(recipient_id=self.request.user.branch_id)
+            closed_count = closed_count.filter(recipient_id=self.request.user.branch_id)
+
             inv = inv.filter(branch_id=self.request.user.branch_id)
-
-            sent_count = inv.filter(
-                status=Status.sent,
-                branch_id=self.request.user.branch_id,
-                recipient_id=self.request.user.branch_id
-            ).aggregate(count=Count('id', default=0))['count']
-
-        status_counts_query_dict = inv.values('status').annotate(
-            count=Count('id')
-        )
-        status_counts = {item['status']: item['count'] for item in status_counts_query_dict}
-
 
         monthly_stat_counts = inv.annotate(
             month=ExtractMonth('created_at')
@@ -172,11 +169,10 @@ class StatisticsView(APIView):
             monthly_prices[item['month'] - 1] = item['total_price']
 
         stat = {
-            'accepted': status_counts.get(Status.accepted, 0),
-            'sent': sent_count,
-            'delivered': status_counts.get(Status.delivered, 0),
-            'closed': status_counts.get(Status.closed, 0),
-
+            'accepted': accepted_count.aggregate(count=Count('id'))['count'],
+            'sent': sent_count.aggregate(count=Count('id'))['count'],
+            'delivered': delivered_count.aggregate(count=Count('id'))['count'],
+            'closed': closed_count.aggregate(count=Count('id'))['count'],
             'monthly_counts': monthly_counts,
             'monthly_weights': monthly_weights,
             'monthly_prices': monthly_prices
