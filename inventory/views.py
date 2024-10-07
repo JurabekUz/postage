@@ -153,9 +153,11 @@ class StatisticsView(APIView):
             delivered_count = delivered_count.filter(recipient_id=self.request.user.branch_id)
             closed_count = closed_count.filter(recipient_id=self.request.user.branch_id)
 
-        monthly_stat_counts = inv.filter(
-            Q(branch_id=self.request.user.branch_id) | Q(recipient_id=self.request.user.branch_id)
-        ).annotate(
+            inv = inv.filter(
+                Q(branch_id=self.request.user.branch_id) | Q(recipient_id=self.request.user.branch_id)
+            )
+
+        monthly_stat_counts = inv.annotate(
             month=ExtractMonth('created_at')
         ).values('month').annotate(
             count=Count('id'),
