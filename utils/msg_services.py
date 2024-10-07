@@ -7,11 +7,11 @@ from inventory.models import Status
 def generate_msg(inventory):
     match inventory.status:
         case Status.accepted:
-            return f"Hurmatli mijoz!\nBuyurtmangiz muvaffaqiyatli qabul qilindi.\nBuyurtma raqami:{inventory.number}"
+            return f"Hurmatli mijoz!\nBuyurtmangiz muvaffaqiyatli qabul qilindi.\nBuyurtma raqami: {inventory.number}"
         case Status.sent:
-            return f"Hurmatli mijoz!\n{inventory.number} raqamli buyurtmangiz yo'lga chiqdi."
+            return f"Hurmatli mijoz!\n{inventory.number} raqamli buyurtmangiz yo‘lga chiqdi!"
         case Status.delivered:
-            return f"Hurmatli mijoz!\n{inventory.number} raqamli buyurtmangiz {inventory.recipient.name} ulashish punkitiga yetkazildi.\nManzil: {inventory.recipient.address}"
+            return f"Hurmatli mijoz!\n{inventory.number} raqamli buyurtmangiz {inventory.recipient.name}dagi filialimizga yetib keldi.\nManzil: {inventory.recipient.address}"
         case Status.closed:
             return f"Hurmatli mijoz!\n{inventory.number} raqamli buyurtmangiz muvaffaqiyatli yetkazildi.\nBizning xizmatlarimizdan foydalanganiz uchun rahmat!"
 

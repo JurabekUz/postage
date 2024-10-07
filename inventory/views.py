@@ -135,6 +135,7 @@ class StatisticsView(APIView):
         if year:
             inv = inv.filter(created_at__year=int(year))
 
+        all_count = inv
         accepted_count = inv.filter(status=Status.accepted)
         sent_count = inv.filter(status=Status.sent)
         delivered_count = inv.filter(status=Status.delivered)
@@ -142,6 +143,9 @@ class StatisticsView(APIView):
 
 
         if not self.request.user.is_staff:
+            all_count = all_count.filter(
+                Q(branch_id=self.request.user.branch_id) | Q(recipient_id=self.request.user.branch_id)
+            )
             accepted_count = accepted_count.filter(branch_id=self.request.user.branch_id)
             sent_count = sent_count.filter(
                 Q(branch_id=self.request.user.branch_id) | Q(recipient_id=self.request.user.branch_id)
@@ -149,9 +153,9 @@ class StatisticsView(APIView):
             delivered_count = delivered_count.filter(recipient_id=self.request.user.branch_id)
             closed_count = closed_count.filter(recipient_id=self.request.user.branch_id)
 
-            inv = inv.filter(branch_id=self.request.user.branch_id)
-
-        monthly_stat_counts = inv.annotate(
+        monthly_stat_counts = inv.filter(
+            Q(branch_id=self.request.user.branch_id) | Q(recipient_id=self.request.user.branch_id)
+        ).annotate(
             month=ExtractMonth('created_at')
         ).values('month').annotate(
             count=Count('id'),
@@ -169,6 +173,7 @@ class StatisticsView(APIView):
             monthly_prices[item['month'] - 1] = item['total_price']
 
         stat = {
+            "all_count": all_count.aggregate(count=Count('id'))['count'],
             'accepted': accepted_count.aggregate(count=Count('id'))['count'],
             'sent': sent_count.aggregate(count=Count('id'))['count'],
             'delivered': delivered_count.aggregate(count=Count('id'))['count'],
